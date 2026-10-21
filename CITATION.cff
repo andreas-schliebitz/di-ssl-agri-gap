@@ -1,0 +1,66 @@
+cff-version: 1.2.0
+message: "If you use this software or the results it produced, please cite the paper below."
+
+title: "di-ssl-agri-gap: Joint vs. Data-Incremental Self-Supervised Pretraining for Plant Classification"
+abstract: >-
+  Code, configurations and result tables measuring the penalty for pretraining a
+  self-supervised visual encoder incrementally on an arriving stream of agricultural
+  imagery rather than jointly on the whole corpus. DINOv2 ViT-S/14 is pretrained on
+  iNatAg-mini under compute-matched joint and chained-incremental regimes, then frozen and
+  evaluated by linear probes at four nested taxonomic levels. The penalty is strongly
+  granularity dependent, reaching 7.06 accuracy points at species level against 1.81 for
+  crop versus weed discrimination, which a single aggregate probe accuracy conceals.
+type: software
+version: 0.1.0
+license: Apache-2.0
+repository-code: "https://github.com/andreas-schliebitz/di-ssl-agri-gap"
+
+keywords:
+  - Self-Supervised Learning
+  - Data-Incremental Pre-Training
+  - Representation Drift
+  - Label Granularity
+  - Agricultural Image Classification
+
+authors:
+  - family-names: Schliebitz
+    given-names: Andreas
+    email: a.schliebitz@hs-osnabrueck.de
+    orcid: "https://orcid.org/0000-0003-0361-7770"
+    affiliation: "Osnabrück University of Applied Sciences, Faculty of Engineering and Computer Science"
+  - family-names: Tapken
+    given-names: Heiko
+    email: h.tapken@hs-osnabrueck.de
+    orcid: "https://orcid.org/0000-0002-0685-5072"
+    affiliation: "Osnabrück University of Applied Sciences, Faculty of Engineering and Computer Science"
+  - family-names: Atzmüller
+    given-names: Martin
+    email: martin.atzmueller@uni-osnabrueck.de
+    orcid: "https://orcid.org/0000-0002-2480-6901"
+    affiliation: "Osnabrück University, Semantic Information Systems Group"
+
+preferred-citation:
+  type: conference-paper
+  title: "Mind the Gap: Joint vs. Data-Incremental Self-Supervised Pretraining for Plant Classification"
+  authors:
+    - family-names: Schliebitz
+      given-names: Andreas
+      email: a.schliebitz@hs-osnabrueck.de
+      orcid: "https://orcid.org/0000-0003-0361-7770"
+      affiliation: "Osnabrück University of Applied Sciences, Faculty of Engineering and Computer Science"
+    - family-names: Tapken
+      given-names: Heiko
+      email: h.tapken@hs-osnabrueck.de
+      orcid: "https://orcid.org/0000-0002-0685-5072"
+      affiliation: "Osnabrück University of Applied Sciences, Faculty of Engineering and Computer Science"
+    - family-names: Atzmüller
+      given-names: Martin
+      email: martin.atzmueller@uni-osnabrueck.de
+      orcid: "https://orcid.org/0000-0002-2480-6901"
+      affiliation: "Osnabrück University, Semantic Information Systems Group"
+  # Venue fields below are provisional until the paper is accepted. Update them and add
+  # volume, pages, doi and month once the publication details are final.
+  year: 2026
+  collection-title: "Lecture Notes in Informatics (LNI)"
+  publisher:
+    name: "Gesellschaft für Informatik"

@@ -1,0 +1,283 @@
+\documentclass[english]{lni}
+
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{enumitem}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+\usepackage{booktabs}
+
+\addbibresource{bibliography.bib}
+\makeatletter
+\setlength{\bibitemsep}{0pt}
+\setlength{\textfloatsep}{8pt \@plus 2pt \@minus 2pt}
+
+\makeatother
+\begin{document}
+\title{Mind the Gap: Joint vs. Data-Incremental Self-Supervised Pretraining for Plant Classification}
+
+\author[1]{Andreas Schliebitz}{a.schliebitz@hs-osnabrueck.de}{0000-0003-0361-7770}
+\author[1]{Heiko Tapken}{h.tapken@hs-osnabrueck.de}{0000-0002-0685-5072}
+\author[2]{Martin Atzmueller}{martin.atzmueller@uni-osnabrueck.de}{0000-0002-2480-6901}
+\affil[1]{Osnabrück University of Applied Sciences\\Faculty of Engineering and Computer Science\\Albrechtstr. 30\\49076 Osnabrück\\Germany}
+\affil[2]{Osnabrück University\\Semantic Information Systems Group\\Wachsbleiche 27\\49090 Osnabrück\\Germany}
+
+\maketitle
+
+\begin{abstract}
+Agricultural image collections grow continuously, which makes pretraining a visual encoder incrementally on arriving data attractive compared with repeating joint pretraining over the whole accumulated corpus. Whether the resulting representations are weaker and whether any weakening depends on the granularity of the labels used for evaluation, has not been quantified. We pretrain DINOv2 on iNatAg-mini jointly and as chained streams of two, four or eight segments under two presentation orders, holding both the number of gradient steps and the number of times each image is seen constant. Frozen encoders are evaluated by linear probes at four taxonomic levels. The incremental penalty is strongly granularity dependent: at eight segments it reaches 7.06 points at species level against 1.81 points for crop versus weed discrimination. Taxonomic error analysis and representational similarity indicate progressive drift as the driver.
+\end{abstract}
+
+\begin{keywords}
+Self-Supervised Learning, Data-Incremental Pre-Training, Representation Drift, Label Granularity, Agricultural Image Classification
+\end{keywords}
+
+\section{Introduction}\label{sec:introduction}
+
+Image collections in agriculture are rarely complete. They accumulate across growing seasons, field campaigns and geographic sites, so the underlying distribution shifts as the corpus grows: plants advance through phenological stages, cultivation practices differ between regions and acquisition hardware is replaced. Deep learning is the default tool for interpreting such imagery \cite{Kamilaris2018}, which leaves a recurring decision whenever new data arrives. Retraining from scratch over the whole accumulated corpus is expensive and presupposes that all earlier images remain available, which fails whenever data is held by different partners or subject to retention limits. Continuing to pretrain from the previous model on each new batch avoids both problems.
+
+The decision is sharpened by an asymmetry in labeling cost. Distinguishing crops from weeds is cheap and can be crowdsourced, whereas assigning a species requires botanical expertise and does not scale to the hundreds of thousands of images a modern campaign produces \cite{VanHorn2018,Jain2025}. Self-supervised learning sidesteps this: an encoder is trained on unlabeled images and frozen, after which a small labeled set suffices to fit a linear probe for any downstream target \cite{Chen2020,Caron2021,Oquab2024}, an approach already shown to help on agricultural imagery \cite{Gueldenring2021}.
+
+What remains unclear is what incremental pretraining costs. Continual learning research has established that sequential training induces catastrophic forgetting \cite{French1999,Kirkpatrick2017} and a growing body of work studies this under self-supervised objectives \cite{Fini2022,Purushwalkam2022,Madaan2022}, reporting representation quality as a single aggregate score. Such a score cannot express whether a representation has lost the ability to separate closely related classes while retaining coarse structure. For agricultural deployment the distinction is decisive, because both tasks are served by the same frozen encoder yet carry very different labeling budgets.
+
+We therefore ask whether the penalty for pretraining incrementally rather than jointly depends on the granularity of the evaluation labels. The iNatAg-mini corpus \cite{Jain2025} suits the question, providing a nested taxonomy over 2,958 plant species so that four probe targets of decreasing granularity can be read off one frozen encoder. Our contributions\footnote{Results can be reproduced using the code available at \url{https://github.com/andreas-schliebitz/di-ssl-agri-gap}.} are as follows:
+
+\begin{itemize}[nosep]
+  \item A compute-matched comparison of joint and data-incremental self-supervised pretraining, where both settings spend the same gradient steps and see each image equally often, evaluated at four levels of a nested taxonomy (\cref{sec:method}).
+  \item Evidence that the incremental penalty is strongly granularity dependent: at eight segments it reaches 7.06 points at species level against 1.81 for crop versus weed, \ie{} 18.6\,\% against 2.4\,\% relative, growing monotonically with segment count under two independent presentation orders (\cref{sec:results}).
+  \item An attribution of the effect to representational drift, through species confusions migrating upwards in the taxonomy, falling containment within the correct genus and decreasing centered kernel alignment against the joint encoder.
+  \item The finding that a phenologically ordered stream behaves almost identically to an order-preserving one, which locates the cause in fragmentation of the stream rather than in distribution shift within it.
+\end{itemize}
+
+\section{Related Work}\label{sec:related-work}
+
+\subsection{Self-Supervised Visual Representation Learning}
+
+Modern self-supervised methods enforce agreement between differently augmented views of an image. Contrastive formulations such as SimCLR \cite{Chen2020} and MoCo contrast positive pairs against negatives, whereas non-contrastive approaches including BYOL dispense with negatives. DINO \cite{Caron2021} replaces the explicit contrast with self-distillation between a student and an exponential moving average teacher over a multi-crop view set. DINOv2 \cite{Oquab2024} adds the patch-level iBOT loss \cite{Zhou2022} with a Kozachenko-Leonenko entropy regularizer \cite{Sablayrolles2019}. All operate on vision transformers \cite{Dosovitskiy2021} and are conventionally assessed by freezing the encoder and fitting a linear classifier, a protocol we adopt unchanged.
+
+\subsection{Continual and Incremental Learning}
+
+Training a network on a sequence of data rather than a shuffled corpus degrades performance on earlier data \cite{French1999}. Countermeasures fall into regularization of parameters important to previous tasks \cite{Kirkpatrick2017}, distillation from the previous model \cite{Li2018} and rehearsal of stored exemplars \cite{Rebuffi2017}, while recent surveys organize the field comprehensively \cite{Parisi2019}. The right countermeasure depends on how the stream is constructed. Van de Ven et al. \cite{VanDeVen2019}, for example, distinguish task-incremental, domain-incremental, and class-incremental scenarios. Our setting is simpler since the label space is fixed and only the instances change, corresponding to the instance-incremental scenario of the Continuum library \cite{Douillard2021}. Holding classes constant isolates the effect of sequential presentation from that of a growing label space.
+
+\subsection{Continual Self-Supervised Learning}
+
+Self-supervised objectives are reportedly more robust to sequential training than supervised ones \cite{Madaan2022}. Cossu et al. \cite{Cossu2024} find that continual pretraining alone mitigates forgetting without a dedicated strategy. A measurable penalty nevertheless persists: CaSSLe \cite{Fini2022} converts self-supervised losses into distillation mechanisms mapping current representations onto their previous state, while Purushwalkam et al. \cite{Purushwalkam2022} show that naive streaming is inefficient and that temporally correlated streams degrade representations, which replay buffers partly repair. All of these quantify representation quality with one aggregate probe accuracy. None asks whether the penalty is distributed evenly across label granularities, which is our question.
+
+\subsection{Fine-Grained and Agricultural Recognition}
+
+Fine-grained recognition separates classes that share the same global structure and only differ in small local details, as in species-level plant identification \cite{Wei2022}. The iNaturalist datasets established the long-tailed, expert-labeled setting \cite{VanHorn2018}, which iNatAg \cite{Jain2025} extends to 4.7M images of crop and weed species with a taxonomic hierarchy. AgML \cite{Joshi2023} standardizes dataset access and supplies the taxonomic metadata we use. To our knowledge the interaction between incremental self-supervised pretraining and label granularity has not previously been measured.
+
+\section{Method}\label{sec:method}
+
+\subsection{Dataset, Taxonomy and Split}\label{sec:data}
+
+All experiments use iNatAg-mini \cite{Jain2025}, the reduced release of iNatAg that caps each species at 200 images. The dataset contains 560,846 images over 2,958 species, with per-species counts from 50 to 200. Each image carries an observation record with a capture date and coordinates, populated for approximately 99\,\% of images. The records form a superset of the delivered images, so they must be joined on the photograph identifier rather than positionally, after which 560,841 images remain.
+
+Four nested taxa are derived per image, where species is the directory name and genus its leading token, yielding 1,171 classes. Family comes from the taxonomic metadata bundled with AgML \cite{Joshi2023}, giving 215 classes. The binary crop versus weed label is available redundantly from the directory structure and from AgML, which we cross-check. Because the hierarchy is strictly nested, one split stratified at the finest level guarantees every genus and family occurs in every part. We therefore draw a single species-stratified partition of 420,630 training, 84,126 validation and 56,085 test images, fix it once and reuse it throughout our experiments. Images are resized to a short side of 256 pixels beforehand.
+
+\subsection{Self-Supervised Pretraining}\label{sec:pretrain}
+
+We pretrain a ViT-S/14 \cite{Dosovitskiy2021} with the DINOv2 objective \cite{Oquab2024}, combining the DINO self-distillation loss \cite{Caron2021}, the iBOT patch-level loss \cite{Zhou2022} and the Kozachenko-Leonenko regularizer \cite{Sablayrolles2019}, over two global crops of 224 pixels and eight local crops of 98 pixels. Optimization uses AdamW with the reference schedule of the method, a global batch of 192 in mixed bfloat16 precision on two NVIDIA A100 GPUs, for 100 epochs over the training split, which amounts to 219,000 optimizer steps. Pretraining sees the training split only, so validation and test images never enter the encoder.
+
+Through empirical measurements, we choose to initialize the encoder randomly rather than from DINOv2's pretrained weights. Adaptation of those weights was evaluated across four learning rates and two augmentation settings, and the adapted encoder underperformed the randomly initialized encoder at the species level (\cref{sec:adaptation}). Random initialization removes this confound. With no pretrained representation to forget, the published hyperparameters apply unchanged, and any difference between joint and incremental training is attributable to presentation order alone.
+
+\subsection{Constructing the Incremental Streams}\label{sec:streams}
+
+In the incremental setting, the training split is partitioned into $N \in \{2,4,8\}$ disjoint segments. Pretraining is conducted in sequence, where each run is initialized from its predecessor's checkpoint. Segments are consumed through the instance-incremental scenario of Continuum \cite{Douillard2021}, which keeps the label space fixed while the instances change. We supply the segment assignment explicitly rather than using the default partitioner, whose random seed does not influence the partition and which assigns all per-class remainders to the first segment, leaving it roughly 22\,\% oversized at $N=8$ and thereby breaking compute matching.
+
+Two presentation orders are compared. The \emph{independent and identically distributed} (i.i.d.) order shuffles each species independently and deals its images round-robin, so every segment contains all 2,958 species with per-class counts differing by at most one, isolating the effect of sequential presentation. The \emph{seasonal} order sorts images by month of capture while ignoring the year and partitioning the result into equal-sized contiguous blocks. Additionally, southern-hemisphere months are shifted by six so phenologically equivalent periods coincide, without which northern and southern seasons would cancel. Temporal ordering by absolute date was measured and rejected because 91.5\,\% of the corpus falls in 2020 to 2025 and 50.9\,\% in 2024 alone, so equal-sized blocks would eventually collapse into a single year. The seasonal ordering deliberately leaves each segment incomplete. At $N=8$, the data chunks cover only 87.4\,\% to 94.1\,\% of all species, which is the shift this ordering is intended to introduce. The 1,645 training images without a usable date and therefore no attributable season are excluded from this setting.
+
+In order to guarantee a fair comparison, compute is matched by design, since each segment holds $1/N$ of the split, 100 epochs over it cost $219{,}000/N$ steps, and the $N$ segments together spend the joint budget. Every image is seen exactly 100 times in both settings, so the comparison varies presentation order while holding computation and exposures per image constant.
+
+Segment chaining is designed to forward the previously completed training checkpoint, so DINOv2's momentum teacher and both projection heads carry their weights across segment boundaries. However, the optimizer state and learning rate schedule do not, so warmup and the cosine cycle restart for each segment. We therefore report what a practitioner resuming pretraining without reconstructing the schedule obtains, but the measured gap consequently contains a schedule-restart component \cite{Loshchilov2017} alongside the ordering effect.
+
+\subsection{Evaluation Protocol}\label{sec:eval}
+
+Each encoder is frozen permanently after pretraining and features are extracted once without augmentation. Each image is resized to 256 pixels and a central 224-pixel crop is taken. The representation is the class token concatenated with the mean of the patch tokens, which yields a 768-dimensional vector. On these cached features we fit one linear probe per taxonomic level, sweeping the probe learning rate over six values. Because macro-averaged accuracy over 2,958 classes of unequal support is not top-1 accuracy, we compute both and quote top-1 unless stated otherwise.
+
+\subsection{Measuring Representational Change}\label{sec:mechanism}
+
+We use three quantities to test whether an accuracy drop reflects drift rather than noise. The \emph{hierarchical error distance} assigns each test image 0 when the species is correct, 1 when the prediction falls in the correct genus, 2 when it falls in the correct family but the wrong genus and 3 otherwise; we report its mean. \emph{Containment} is the probability that a species error stays within the correct genus, which prior error analysis on this taxonomy reports as high \cite{Jain2025} and which drift should erode. Linear centered kernel alignment (CKA) \cite{Kornblith2019} between the test features of an incremental encoder and the joint one quantifies how far the representation has moved.
+
+All pretraining runs are executed with LightlyTrain \cite{LightlyTrain2025} with a single random seed of 42.
+
+\section{Results}\label{sec:results}
+
+\subsection{The Joint Baseline in Context}\label{sec:baseline}
+
+Table \ref{tab:absolute} lists test top-1 accuracy for every encoder. Trained from random initialization on 420,630 images, the joint encoder reaches 37.93\,\% at species level, roughly 1,100 times the 0.034\,\% expected by chance over 2,958 classes. It reaches 74.16\,\% on the binary task. Accuracy rises monotonically as the target coarsens, reproducing the ordering reported for supervised models on this taxonomy \cite{Jain2025}.
+
+The publicly released DINOv2 encoder, pretrained on 142 million curated images, is reported only as an external reference, because our encoder was not initialized from those weights. The comparison with our jointly trained encoder is nevertheless informative. On the crop-versus-weed task the two differ by 1.51 percentage points (74.16 for the jointly trained encoder and 75.67 for the released encoder), whereas at species level the gap is 16.52 points. Coarse discriminative structure is therefore learnable from 560k in-domain images alone while fine-grained structure is not. This observation represents the same granularity asymmetry that the incremental comparison exposes from another direction.
+
+\begin{table}
+\centering\footnotesize
+\begin{tabular}{llrrrr}
+\toprule
+Encoder & Order & Species & Genus & Family & Crop/weed \\
+\midrule
+Released DINOv2               & --      & 54.45 & 63.64 & 66.85 & 75.67 \\
+Joint (ours)                  & --      & 37.93 & 46.67 & 54.06 & 74.16 \\
+\midrule
+Incremental, $N=2$            & i.i.d.  & 36.13 & 44.60 & 52.32 & 73.43 \\
+Incremental, $N=4$            & i.i.d.  & 34.73 & 42.14 & 49.72 & 73.22 \\
+Incremental, $N=8$            & i.i.d.  & 30.86 & 37.83 & 45.83 & 72.35 \\
+\midrule
+Incremental, $N=2$            & seasonal & 36.61 & 44.50 & 51.90 & 73.17 \\
+Incremental, $N=4$            & seasonal & 34.59 & 42.52 & 49.51 & 72.81 \\
+Incremental, $N=8$            & seasonal & 30.71 & 37.61 & 45.51 & 71.83 \\
+\bottomrule
+\end{tabular}
+\caption{Linear-probe test top-1 accuracy in percent. Incremental rows report the final segment of each configuration. The released DINOv2 encoder is only for reference and not an upper bound (\cref{sec:baseline}).}
+\label{tab:absolute}
+\end{table}
+
+\subsection{The Gap Depends on Granularity}\label{sec:gap}
+
+Figure \ref{fig:gap-granularity} plots the gap between the joint encoder and the final segment of each incremental configuration, from which three observations follow:
+
+\begin{enumerate}
+    \item The gap is strongly granularity dependent: under i.i.d.\ ordering at $N=8$ it reaches 7.06 points at species level but only 1.81 at crop versus weed, or 18.6\,\% and 2.4\,\% of the corresponding joint baselines, a factor of roughly eight. A practitioner updating incrementally forfeits almost a fifth of species-level accuracy while losing very little ability to separate crops from weeds.
+    \item The gap increases monotonically with the number of segments under both orderings, from 1.79 to 3.20 to 7.06 points at species level. Because each configuration uses a single random seed, no individual value has an error bar. The claim rests on this monotone trend, replicated across two independent orderings, rather than on any single measurement.
+    \item Species is not the most affected level: genus drops by 8.84 points and family by 8.23, both more than species. This result therefore supports a split between fine-grained and coarse targets, rather than a gradient that tracks class count, as interpreted in \cref{sec:discussion}.
+\end{enumerate}
+
+\begin{figure}[tb]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[
+  group style={group size=2 by 1, horizontal sep=1.4cm},
+  width=0.45\linewidth, height=3.2cm,
+  legend style={legend columns=3, draw=none, fill=none, font=\scriptsize},
+  ybar, /pgf/bar width=3.4pt,
+  symbolic x coords={species,genus,family,crop/weed},
+  xtick=data,
+  x tick label style={font=\scriptsize, rotate=30, anchor=east},
+  y tick label style={font=\scriptsize},
+  ymin=0, ymax=10.5,
+  ylabel={Gap (points)}, ylabel style={font=\scriptsize},
+  enlarge x limits=0.16,
+  ymajorgrids=true, grid style={gray!25},
+  title style={font=\scriptsize},
+]
+\nextgroupplot[title={i.i.d.\ ordering}, legend to name=fig1legend]
+\addplot coordinates {(species,1.79) (genus,2.06) (family,1.74) (crop/weed,0.73)};
+\addplot coordinates {(species,3.20) (genus,4.52) (family,4.35) (crop/weed,0.94)};
+\addplot coordinates {(species,7.06) (genus,8.84) (family,8.23) (crop/weed,1.81)};
+\legend{$N=2$,$N=4$,$N=8$}
+\nextgroupplot[title={seasonal ordering}]
+\addplot coordinates {(species,1.32) (genus,2.17) (family,2.16) (crop/weed,0.99)};
+\addplot coordinates {(species,3.33) (genus,4.15) (family,4.55) (crop/weed,1.35)};
+\addplot coordinates {(species,7.22) (genus,9.06) (family,8.55) (crop/weed,2.33)};
+\end{groupplot}
+\end{tikzpicture}\\
+\ref{fig1legend}
+\caption{Accuracy gap between joint pretraining and the final segment of incremental pretraining, by taxonomic level and number of segments $N$, for both presentation orders. Higher bars mean a larger penalty. Crop versus weed is almost unaffected while the three fine-grained levels lose substantially while the orders behave near-identically.}
+\label{fig:gap-granularity}
+\end{figure}
+
+\subsection{Stream Length Matters, Ordering Does Not}\label{sec:trajectory}
+
+Probing every segment separately highlights two effects that the final accuracy numbers conflate. Figure \ref{fig:gap-trajectory} shows the gap after each of the eight segments under i.i.d. ordering. After the first segment, the gap is 22.78 points at species level, which mostly reflects that the encoder has only seen an eighth of the corpus rather than effects of forgetting. The species level gap then falls monotonically, reaching 7.06 points at the last segment. Incremental pretraining thus recovers most, but not all, of the deficit as the data stream proceeds. The crop vs. weed curve is nearly flat throughout, never exceeding a gap of 5.19 points.
+
+\begin{figure}[tb]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.92\linewidth, height=3.2cm,
+  legend to name=fig2legend,
+  xlabel={Segment index}, ylabel={Gap (points)},
+  label style={font=\scriptsize}, tick label style={font=\scriptsize},
+  xmin=-0.35, xmax=7.35, ymin=0, ymax=28,
+  xtick={0,1,2,3,4,5,6,7},
+  ymajorgrids=true, grid style={gray!25},
+  legend style={legend columns=4, draw=none, fill=none, font=\scriptsize},
+  mark size=1.5pt,
+]
+\addplot coordinates {(0,22.78)(1,16.04)(2,11.83)(3,9.82)(4,8.61)(5,7.77)(6,7.00)(7,7.06)};
+\addplot coordinates {(0,26.00)(1,18.65)(2,14.46)(3,12.10)(4,10.67)(5,9.81)(6,8.91)(7,8.84)};
+\addplot coordinates {(0,21.58)(1,16.10)(2,12.88)(3,11.17)(4,10.03)(5,9.14)(6,8.56)(7,8.23)};
+\addplot coordinates {(0,5.19)(1,3.85)(2,3.20)(3,2.56)(4,2.14)(5,2.15)(6,2.12)(7,1.81)};
+\legend{species,genus,family,crop/weed}
+\end{axis}
+\end{tikzpicture}\\
+\ref{fig2legend}
+\caption{Gap to joint pretraining measured after every segment of the eight-segment i.i.d.\ stream. The large initial deficit reflects limited data rather than forgetting and shrinks as the stream proceeds, leaving a residual that remains far larger for the fine-grained levels than for crop versus weed.}
+\label{fig:gap-trajectory}
+\end{figure}
+
+Seasonal ordering was constructed to introduce genuine covariate shift. Analyzing the segments confirm this: at $N=8$, each segment omits between 6.0\,\% and 12.6\,\% of the species. Yet its gaps are almost indistinguishable from those of the coverage-preserving order with 7.22 against 7.06 points at species and 9.06 against 8.84 at genus. Both orders respond far more to how many segments the stream is divided into than to whether those segments are distributionally comparable. Within the range of shift this corpus admits, the penalty is therefore driven by dataset fragmentation rather than covariate shift. The slightly larger crop vs. weed gap under seasonal ordering (2.33 vs. 1.81 points), is the only measurement where shift leaves an attributable mark.
+
+\subsection{Evidence for Representational Drift}\label{sec:drift}
+
+Table \ref{tab:mechanism} reports the three quantities of representational drift described in Section \ref{sec:mechanism}. All move monotonically with segment count and in the general direction drift predicts. The mean hierarchical error distance rises from 1.49 for joint pretraining to 1.75 at $N=8$, so species confusions land not only more often but also further from the truth within the taxonomy. Containment within the correct genus falls from 19.01\,\% to 14.55\,\%, a relative reduction of 23\,\%, meaning false predictions increasingly escape the genus altogether. Centered kernel alignment against the joint encoder decreases from 0.667 at $N=2$ to 0.607 at $N=8$, confirming that the representation moves further as the stream is divided more finely. Since the three measures agree with one another and with the gaps in accuracy, a progressive drift in representation is very likely.
+
+\begin{table}
+\centering\footnotesize
+\begin{tabular}{llrrrr}
+\toprule
+Encoder & Order & Distance & In genus & In family & CKA \\
+\midrule
+Joint              & --       & 1.495 & 0.190 & 0.402 & -- \\
+Incremental, $N=2$ & i.i.d.   & 1.564 & 0.171 & 0.380 & 0.667 \\
+Incremental, $N=4$ & i.i.d.   & 1.620 & 0.160 & 0.358 & 0.660 \\
+Incremental, $N=8$ & i.i.d.   & 1.745 & 0.145 & 0.331 & 0.607 \\
+\midrule
+Incremental, $N=2$ & seasonal & 1.548 & 0.176 & 0.382 & 0.665 \\
+Incremental, $N=4$ & seasonal & 1.626 & 0.160 & 0.355 & 0.656 \\
+Incremental, $N=8$ & seasonal & 1.753 & 0.144 & 0.327 & 0.597 \\
+\bottomrule
+\end{tabular}
+\caption{Representational change at the final segment of each configuration. Distance is the mean hierarchical error distance, containment is the share of species errors falling inside the correct genus or family and CKA is linear centered kernel alignment against the jointly pretrained encoder.}
+\label{tab:mechanism}
+\end{table}
+
+\subsection{Why the Encoder Is Not Adapted From Released Weights}\label{sec:adaptation}
+
+Table \ref{tab:adaptation} summarizes the runs behind the experimental design decision explained in Section \ref{sec:pretrain}. Adapting DINOv2's released weights was attempted at four learning rates spanning two orders of magnitude, under the reference image augmentation recipe and a variant with softened photometric augmentations, motivated by color being a primary species cue. No configuration matched the un-adapted encoder. Lower learning rates help monotonically but with clearly diminishing returns. The best adapted result of 40.40\,\% remains 14.05 points below DINOv2's vanilla pretrained weights. A full 100-epoch run at the reference learning rate reached 39.81\,\%, placing it among the short 10-epoch runs rather than above them. This indicates a ceiling near 40\,\% rather than an undertrained model. We read this as a scale effect: 560k images at roughly 190 per species are too few for this objective to improve on a representation distilled from 142M images. It also disqualifies adaptation as a basis for this study, since a joint baseline weaker than doing nothing would make the gap uninterpretable.
+
+\begin{table}
+\centering\footnotesize
+\begin{tabular}{llrr}
+\toprule
+Augmentation & Peak learning rate & Species top-1 (\%) & vs.\ un-adapted \\
+\midrule
+Reference & $2.0 \times 10^{-3}$ & 10.78 & $-43.67$ \\
+Reference & $2.0 \times 10^{-4}$ & 33.64 & $-20.81$ \\
+Reference & $5.0 \times 10^{-5}$ & 36.32 & $-18.13$ \\
+Reference & $2.0 \times 10^{-5}$ & 38.63 & $-15.82$ \\
+Softened photometric & $2.0 \times 10^{-5}$ & 40.40 & $-14.05$ \\
+Softened, backbone frozen initially & $2.0 \times 10^{-5}$ & 35.85 & $-18.60$ \\
+\bottomrule
+\end{tabular}
+\caption{Adaptation of released DINOv2 weights to iNatAg-mini, species-level test top-1 accuracy after 10 epochs. The last column is the difference to the un-adapted encoder at 54.45\,\% (\cref{tab:absolute}).}
+\label{tab:adaptation}
+\end{table}
+
+Finally, we analyze what a single top-1 accuracy figure would have reported. For the eight-segment i.i.d. stream an unweighted mean over the four taxonomy levels gives 6.49 points of degradation, which exceeds the crop vs. weed penalty by a factor of 3.6 and understates the genus penalty by a factor of 1.4. It therefore misstates the consequence for both the cheapest and the most expensive downstream task. Since the four probes read from the same frozen encoder, quantifying the effects of label granularity comes at no extra cost.
+
+\section{Discussion}\label{sec:discussion}
+
+\subsection{Interpreting the Granularity Asymmetry}
+
+Figure \ref{fig:gap-granularity} is best read as a division between coarse and fine-grained targets rather than a performance gradient following class count. Crop vs. weed loses 1.81 points at $N=8$ while species, genus and family lose between 7.06 and 8.84. Therefore, the three fine-grained taxa sit far closer to one another than any of them does to the binary crop vs. weed task. A plausible account is that the binary distinction rests on broad morphological and contextual cues that survive substantial perturbation of the feature space, whereas separating congeneric species depends on localized detail \cite{Wei2022} that a drifting representation loses first.
+
+Surprisingly, species is not the worst-affected level within the taxonomy. Two factors work against a monotone decline in performance: species accuracy is lowest in absolute terms, so there is less to lose than at family level, while in relative terms the difference narrows to 18.6\,\% against 15.2\,\%. The species probe also discriminates 2,958 classes from as few as 37 images each, making its estimate noisier than the 215-way family probe. We therefore claim to observe a coarse vs. fine division, which the data supports robustly, rather than an ordering among the fine-grained levels, which it does not.
+
+For agricultural pipelines the practical reading is partly encouraging. An encoder serving a crop vs. weed model can be updated incrementally at very little cost, exactly the regime where labels are cheap and updates frequent. However, a model for species-level identification should not be trained incrementally following a naive approach, since at eight segments it forfeits close to a fifth of its accuracy, which further segments do not recover (\cref{fig:gap-trajectory}).
+
+The methodological reading is less comfortable. A single aggregate probe accuracy, as reported throughout the continual self-supervised literature \cite{Fini2022,Purushwalkam2022,Madaan2022}, would have described our results as roughly six points of degradation, understating the species penalty and overstating the coarse one by comparable factors. Our finding is compatible with Cossu et al. \cite{Cossu2024}, who conclude that continual pretraining mitigates forgetting. We quantify their observation since mitigation seems to be substantial at coarse and only partial at fine label granularities. This is a distinction an aggregate score cannot express. Nested label hierarchies, which agricultural and biodiversity datasets frequently provide, can therefore benefit from finer reporting which is essentially free to obtain.
+
+\subsection{Limitations}
+
+Our conclusions are bound by four limitations. Each configuration shown in Table \ref{tab:absolute} was trained only once with a fixed random seed, meaning every measurement is a point estimate. The validity of our claim mainly rests on the monotone trend in encoder performance observed across three segment counts replicated under two orderings. The learning rate schedule restarts at each segment boundary, since resuming from a previous training checkpoint restores weights but not optimizer state. Therefore, the measured gap includes a schedule-restart component \cite{Loshchilov2017} and bounds the ordering effect from above. The study operates at 560k images, below the scale at which this objective is competitive with DINOv2's released weights (\cref{sec:adaptation}). Hence, absolute accuracies are modest and the gaps could behave differently at the full 4.7M-image version of the iNatAg dataset \cite{Jain2025}. Finally, only one architecture, one objective and one dataset were examined, so the asymmetry is established for this setting rather than shown to be general.
+
+\subsection{Future Work}
+
+From our work presented in this paper, we can derive four general directions for future work. Since we find performance penalties to concentrate at fine label granularities, the most immediate question is how small a rehearsal buffer closes the species-level gap and whether the required budget itself depends on granularity. If it does, replay could be provisioned according to the finest downstream target rather than uniformly. Second, the distillation approach of CaSSLe \cite{Fini2022} should compress the taxonomy-level gap based on our evidence for representation drift. Evaluating CaSSLe on a per-granularity basis could test whether such methods close prediction gaps in taxonomies evenly while preserving fine-grained structure or merely raise the aggregate. Third, running one training configuration under a single continuous schedule without per-segment restarts would partition the observed gap into ordering and scheduling components. Additionally, repeating the headline configuration across different seeds would turn our point estimates into more robust empirical evidence, likely in support of our claims. Fourth, because the observed prediction errors migrate upward through the taxonomy, objectives making the hierarchy explicit during pretraining could mitigate exactly this failure mode.
+
+\section*{Acknowledgements}
+
+This work was funded by the Lower Saxony Ministry of Science and Culture as well as the Volkswagen Foundation as part of the research project \enquote{RLA - KI Reallabor Agrar} under grant number ZN4530.
+
+\printbibliography
+\end{document}

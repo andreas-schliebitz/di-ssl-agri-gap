@@ -1,0 +1,68 @@
+[tool.poetry]
+name = "di-ssl-agri-gap"
+version = "0.1.0"
+description = "Mind the Gap: Data-Incremental Self-Supervised Learning for Agricultural Image Classification"
+authors = [
+    "Andreas Schliebitz <a.schliebitz@hs-osnabrueck.de>",
+    "Heiko Tapken <h.tapken@hs-osnabrueck.de>",
+    "Martin Atzmüller <martin.atzmueller@uni-osnabrueck.de>",
+]
+license = "Apache-2.0"
+readme = "README.md"
+packages = [{ include = "di_ssl_agri_gap" }]
+
+# Every dependency below is a public PyPI package. This project deliberately has
+# no `git = ` or `path = ` sources: no code is imported from, or copied out of,
+# any sibling repository. See "Authorship and self-containment" in the README.
+[tool.poetry.dependencies]
+python = "^3.12"
+
+# Dataset access and the authoritative taxonomy (family_name lives only here).
+agml = "0.8.0"
+
+# Self-supervised pre-training.
+lightly-train = { version = "0.17.0", extras = ["mlflow"] }
+
+# Continual-learning scenarios (phase 2, InstanceIncremental).
+continuum = "1.2.7"
+
+# Training stack. torch 2.9.1 / torchvision 0.24.1 are the cu128 builds already
+# verified against this node's 535.261.03 driver (CUDA 12.2).
+torch = "2.9.1"
+torchvision = "0.24.1"
+lightning = "2.6.0"
+torchmetrics = "1.8.2"
+timm = "1.0.22"
+
+# Both agml and continuum declare `datasets` without an upper-compatible pin,
+# and pip resolves it to 2.14.4, which calls `pyarrow.PyExtensionType` -- removed
+# in pyarrow 15. That breaks `import agml` and `import continuum` outright, so
+# the floor is pinned here.
+datasets = ">=5.0.0"
+
+# Manifest, splitting, analysis.
+scikit-learn = "1.8.0"
+pyarrow = ">=21.0.0"
+pandas = ">=2.2.3"
+numpy = ">=1.23.0"
+pillow = ">=10.0.0"
+python-dotenv = "1.2.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "9.1.1"
+black = "26.5.1"
+
+[tool.poetry.scripts]
+di-ssl-agri-gap = "di_ssl_agri_gap.main:main"
+
+[tool.pytest.ini_options]
+addopts = "-s"
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

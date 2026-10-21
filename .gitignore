@@ -1,0 +1,82 @@
+# --- secrets -----------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+
+# --- virtualenvs -------------------------------------------------------------
+venv/
+.venv/
+env/
+ENV/
+
+# --- testing / linting -------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# --- experiment outputs ------------------------------------------------------
+out/
+logs/
+mlruns/
+data/
+features/
+predictions/
+results/
+
+# ...but the small summary tables backing the paper are version-controlled, so
+# the reported numbers travel with the code that produced them.
+!docs/results/
+!docs/results/*.csv
+*.ckpt
+*.pt
+*.pth
+*.npy
+*.parquet
+
+# --- editors / os ------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# --- LaTeX build artefacts ---------------------------------------------------
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+docs/paper/*.orig
+docs/paper/*.bak*
+docs/paper/*.part
+
+# The pristine conference template, kept locally as the build input for
+# main.docx but not redistributed.
+docs/paper/lni-template.docx
+
+# Beamer build artefacts
+*.nav
+*.snm
+*.vrb

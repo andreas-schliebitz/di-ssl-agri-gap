@@ -1,0 +1,3 @@
+encoder_id,species,genus,family,cropweed
+joint_vits14scratch_ep100_seed42,37.93,46.67,54.06,74.16
+offtheshelf_vits14,54.45,63.64,66.85,75.67

@@ -1,0 +1,3 @@
+config,base_lr,epochs,encoder_id,species_top1,species_f1,vs_offtheshelf,vs_default_aug
+soft_aug,4e-05,10,joint_vits14_ep100_seed42_ep10_lr4e-05_soft_aug,0.404047429561615,0.39780423045158386,-0.140452570438385,0.017741429561615008
+soft_aug_freeze,4e-05,10,joint_vits14_ep100_seed42_ep10_lr4e-05_soft_aug_freeze,0.3584737479686737,0.3517867922782898,-0.18602625203132628,-0.027832252031326277
